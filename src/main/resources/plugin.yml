@@ -1,0 +1,6 @@
+name: DeepDarkBoss
+version: 1.0.0
+main: io.github.found_cake.deep_dark_boss.Loader
+description: CSKUS
+author: found_cake
+api-version: '1.26.2'
