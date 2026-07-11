@@ -1,6 +1,8 @@
 package io.github.found_cake.deep_dark_boss
 
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.GameMode
 import org.bukkit.Material
 import org.bukkit.damage.DamageType
@@ -16,7 +18,7 @@ import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.inventory.ItemStack
 
 
-class EventListener(private val flag: String) : Listener {
+class EventListener(flag: String) : Listener {
 
     private val cursedEventBook = eventListenerDsl(flag) {
         whenWardenIsDamaged {
@@ -25,7 +27,7 @@ class EventListener(private val flag: String) : Listener {
 
         whenWardenDies {
             ifTheKillerIsPlayerAttack {
-                awardFlagBookAndSpectatorMode()
+                awardFlagAndEnterSpectatorMode()
             }
         }
 
@@ -178,24 +180,30 @@ private class FlagWinnerDsl(
     private val player: Player,
     private val flag: String,
 ) {
+    private val flagText = Component.text(flag)
+        .color(NamedTextColor.GOLD)
+        .decoration(TextDecoration.ITALIC, false)
+
     private val winnerCeremony: List<EventCurse<Player>> =
         listOf(
-            { sendMessage(flag) },
+            { sendMessage(flagText) },
             { inventory.clear() },
-            { inventory.addItem(flagBook()) },
+            { inventory.addItem(flagItem()) },
             { gameMode = GameMode.SPECTATOR },
         )
 
-    fun awardFlagBookAndSpectatorMode() {
+    fun awardFlagAndEnterSpectatorMode() {
         winnerCeremony.forEach { curse ->
             curse.invoke(player)
         }
     }
 
-    private fun flagBook(): ItemStack =
-        ItemStack(Material.BOOK).also { item ->
+    private fun flagItem(): ItemStack =
+        ItemStack(Material.GOLDEN_APPLE).also { item ->
             item.itemMeta
-                .also { meta -> meta.customName(Component.text(flag)) }
+                .also { meta ->
+                    meta.customName(flagText)
+                }
                 .let(item::setItemMeta)
         }
 }
