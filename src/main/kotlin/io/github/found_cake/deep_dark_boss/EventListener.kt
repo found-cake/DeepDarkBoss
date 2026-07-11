@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import org.bukkit.GameMode
+import org.bukkit.Location
 import org.bukkit.Material
 import org.bukkit.damage.DamageType
 import org.bukkit.entity.EntityType
@@ -15,8 +16,23 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
 import org.bukkit.event.entity.FoodLevelChangeEvent
 import org.bukkit.event.player.PlayerDropItemEvent
+import org.bukkit.event.player.PlayerItemHeldEvent
+import org.bukkit.generator.structure.Structure
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.meta.CompassMeta
 
+private const val ANCIENT_CITY_SEARCH_RADIUS_CHUNKS = 256
+private const val ANCIENT_CITY_CACHE_MAXIMUM_SIZE = 2_000
+private const val ANCIENT_CITY_NOT_FOUND_MESSAGE = "심연의 메아리가 탐지되지 않았습니다"
+
+private sealed interface AncientCitySearchResult {
+    data class Found(val location: Location) : AncientCitySearchResult
+
+    data object NotFound : AncientCitySearchResult
+}
+
+private val ancientCitySearchCache =
+    AccessOrderLruCache<AncientCityRegion, AncientCitySearchResult>(ANCIENT_CITY_CACHE_MAXIMUM_SIZE)
 
 class EventListener(flag: String) : Listener {
 
@@ -38,6 +54,10 @@ class EventListener(flag: String) : Listener {
         whenFoodLevelChanges {
             cancelAndFillFoodLevel()
         }
+
+        whenPlayerHoldsCompass {
+            pointAtNearestAncientCity()
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -57,6 +77,11 @@ class EventListener(flag: String) : Listener {
 
     @EventHandler
     fun onFoodLevelChange(event: FoodLevelChangeEvent) {
+        cursedEventBook(event)
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    fun onItemHeld(event: PlayerItemHeldEvent) {
         cursedEventBook(event)
     }
 }
@@ -82,6 +107,7 @@ private class EventListenerScript(
     private val deadWardenScript: EntityDeathEvent.() -> Unit,
     private val droppedItemScript: PlayerDropItemEvent.() -> Unit,
     private val changedFoodLevelScript: FoodLevelChangeEvent.() -> Unit,
+    private val heldCompassScript: PlayerItemHeldEvent.() -> Unit,
 ) {
     operator fun invoke(event: EntityDamageByEntityEvent) {
         event.damagedWardenScript()
@@ -98,6 +124,10 @@ private class EventListenerScript(
     operator fun invoke(event: FoodLevelChangeEvent) {
         event.changedFoodLevelScript()
     }
+
+    operator fun invoke(event: PlayerItemHeldEvent) {
+        event.heldCompassScript()
+    }
 }
 
 @DeepDarkBossEventDsl
@@ -106,6 +136,7 @@ private class EventListenerDsl(private val flag: String) {
     private var deadWardenScript: EntityDeathEvent.() -> Unit = {}
     private var droppedItemScript: PlayerDropItemEvent.() -> Unit = {}
     private var changedFoodLevelScript: FoodLevelChangeEvent.() -> Unit = {}
+    private var heldCompassScript: PlayerItemHeldEvent.() -> Unit = {}
 
     fun whenWardenIsDamaged(block: DamagedWardenDsl.() -> Unit) {
         val wardenGate: EventGate<EntityDamageByEntityEvent> = { entity.type === EntityType.WARDEN }
@@ -135,12 +166,22 @@ private class EventListenerDsl(private val flag: String) {
         changedFoodLevelScript = anyFoodLevelChangeCanBeCursed thenDo changedFoodLevelCurse
     }
 
+    fun whenPlayerHoldsCompass(block: HeldCompassDsl.() -> Unit) {
+        val compassGate: EventGate<PlayerItemHeldEvent> = {
+            player.inventory.getItem(newSlot)?.type === Material.COMPASS
+        }
+        val heldCompassCurse: EventCurse<PlayerItemHeldEvent> = { HeldCompassDsl(this).block() }
+
+        heldCompassScript = compassGate thenDo heldCompassCurse
+    }
+
     fun build(): EventListenerScript =
         EventListenerScript(
             damagedWardenScript = damagedWardenScript,
             deadWardenScript = deadWardenScript,
             droppedItemScript = droppedItemScript,
             changedFoodLevelScript = changedFoodLevelScript,
+            heldCompassScript = heldCompassScript,
         )
 }
 
@@ -228,5 +269,48 @@ private class ChangedFoodLevelDsl(private val event: FoodLevelChangeEvent) {
     fun cancelAndFillFoodLevel() {
         event.isCancelled = true
         event.foodLevel = 20
+    }
+}
+
+@DeepDarkBossEventDsl
+private class HeldCompassDsl(private val event: PlayerItemHeldEvent) {
+    fun pointAtNearestAncientCity() {
+        event.player.let { player ->
+            player.inventory.getItem(event.newSlot)?.let { compass ->
+                val region = ancientCityRegion(player.world.uid, player.chunk.x, player.chunk.z)
+                val searchResult = ancientCitySearchCache.getOrPut(region) {
+                    player.world.locateNearestStructure(
+                        player.location,
+                        Structure.ANCIENT_CITY,
+                        ANCIENT_CITY_SEARCH_RADIUS_CHUNKS,
+                        false,
+                    )?.location
+                        ?.let(AncientCitySearchResult::Found)
+                        ?: AncientCitySearchResult.NotFound
+                }
+
+                when (searchResult) {
+                    is AncientCitySearchResult.Found -> compass.pointAt(searchResult.location)
+                    AncientCitySearchResult.NotFound -> {
+                        compass.clearLodestone()
+                        player.sendActionBar(Component.text(ANCIENT_CITY_NOT_FOUND_MESSAGE))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun ItemStack.pointAt(location: Location) {
+        editMeta(CompassMeta::class.java) { meta ->
+            meta.lodestone = location
+            meta.isLodestoneTracked = false
+        }
+    }
+
+    private fun ItemStack.clearLodestone() {
+        editMeta(CompassMeta::class.java) { meta ->
+            meta.lodestone = null
+            meta.isLodestoneTracked = false
+        }
     }
 }

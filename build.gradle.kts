@@ -19,6 +19,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
+    testImplementation(kotlin("test"))
 }
 
 kotlin {
@@ -28,5 +29,8 @@ kotlin {
 tasks{
     shadowJar{
         archiveFileName.set("DeepDarkBoss.jar")
+    }
+    test {
+        useJUnitPlatform()
     }
 }
