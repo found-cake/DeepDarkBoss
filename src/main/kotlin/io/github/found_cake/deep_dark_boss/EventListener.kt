@@ -178,7 +178,7 @@ private class DeadWardenDsl(
 @DeepDarkBossEventDsl
 private class FlagWinnerDsl(
     private val player: Player,
-    private val flag: String,
+    flag: String,
 ) {
     private val flagText = Component.text(flag)
         .color(NamedTextColor.GOLD)
