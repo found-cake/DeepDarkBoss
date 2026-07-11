@@ -11,6 +11,7 @@ import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
 import org.bukkit.event.entity.EntityDamageByEntityEvent
 import org.bukkit.event.entity.EntityDeathEvent
+import org.bukkit.event.entity.FoodLevelChangeEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.inventory.ItemStack
 
@@ -31,6 +32,10 @@ class EventListener(private val flag: String) : Listener {
         whenPlayerDropsItem {
             makeDropBelongToPlayerAndAge()
         }
+
+        whenFoodLevelChanges {
+            cancelAndFillFoodLevel()
+        }
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -45,6 +50,11 @@ class EventListener(private val flag: String) : Listener {
 
     @EventHandler
     fun onDropItem(event: PlayerDropItemEvent) {
+        cursedEventBook(event)
+    }
+
+    @EventHandler
+    fun onFoodLevelChange(event: FoodLevelChangeEvent) {
         cursedEventBook(event)
     }
 }
@@ -69,6 +79,7 @@ private class EventListenerScript(
     private val damagedWardenScript: EntityDamageByEntityEvent.() -> Unit,
     private val deadWardenScript: EntityDeathEvent.() -> Unit,
     private val droppedItemScript: PlayerDropItemEvent.() -> Unit,
+    private val changedFoodLevelScript: FoodLevelChangeEvent.() -> Unit,
 ) {
     operator fun invoke(event: EntityDamageByEntityEvent) {
         event.damagedWardenScript()
@@ -81,6 +92,10 @@ private class EventListenerScript(
     operator fun invoke(event: PlayerDropItemEvent) {
         event.droppedItemScript()
     }
+
+    operator fun invoke(event: FoodLevelChangeEvent) {
+        event.changedFoodLevelScript()
+    }
 }
 
 @DeepDarkBossEventDsl
@@ -88,6 +103,7 @@ private class EventListenerDsl(private val flag: String) {
     private var damagedWardenScript: EntityDamageByEntityEvent.() -> Unit = {}
     private var deadWardenScript: EntityDeathEvent.() -> Unit = {}
     private var droppedItemScript: PlayerDropItemEvent.() -> Unit = {}
+    private var changedFoodLevelScript: FoodLevelChangeEvent.() -> Unit = {}
 
     fun whenWardenIsDamaged(block: DamagedWardenDsl.() -> Unit) {
         val wardenGate: EventGate<EntityDamageByEntityEvent> = { entity.type === EntityType.WARDEN }
@@ -110,11 +126,19 @@ private class EventListenerDsl(private val flag: String) {
         droppedItemScript = anyDropCanBeCursed thenDo droppedItemCurse
     }
 
+    fun whenFoodLevelChanges(block: ChangedFoodLevelDsl.() -> Unit) {
+        val anyFoodLevelChangeCanBeCursed: EventGate<FoodLevelChangeEvent> = { true }
+        val changedFoodLevelCurse: EventCurse<FoodLevelChangeEvent> = { ChangedFoodLevelDsl(this).block() }
+
+        changedFoodLevelScript = anyFoodLevelChangeCanBeCursed thenDo changedFoodLevelCurse
+    }
+
     fun build(): EventListenerScript =
         EventListenerScript(
             damagedWardenScript = damagedWardenScript,
             deadWardenScript = deadWardenScript,
             droppedItemScript = droppedItemScript,
+            changedFoodLevelScript = changedFoodLevelScript,
         )
 }
 
@@ -188,5 +212,13 @@ private class DroppedItemDsl(private val event: PlayerDropItemEvent) {
         dropCurses.forEach { curse ->
             curse.invoke(event)
         }
+    }
+}
+
+@DeepDarkBossEventDsl
+private class ChangedFoodLevelDsl(private val event: FoodLevelChangeEvent) {
+    fun cancelAndFillFoodLevel() {
+        event.isCancelled = true
+        event.foodLevel = 20
     }
 }
