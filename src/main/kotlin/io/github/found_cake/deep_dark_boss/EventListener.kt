@@ -231,6 +231,14 @@ private class FlagWinnerDsl(
             { inventory.clear() },
             { inventory.addItem(flagItem()) },
             { gameMode = GameMode.SPECTATOR },
+            { server.broadcast(Component.text()
+                .text("✦ ", NamedTextColor.GOLD, bold = true)
+                .text(name, NamedTextColor.AQUA, bold = true)
+                .text("님이 ", NamedTextColor.GRAY)
+                .text("FLAG", NamedTextColor.YELLOW, bold = true)
+                .text("를 획득하였습니다!", NamedTextColor.WHITE)
+                .text(" ✦", NamedTextColor.GOLD, bold = true)
+                .build())},
         )
 
     fun awardFlagAndEnterSpectatorMode() {
