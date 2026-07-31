@@ -19,7 +19,6 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:26.2.build.+")
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
-    testImplementation(kotlin("test"))
 }
 
 kotlin {
@@ -30,7 +29,10 @@ tasks{
     shadowJar{
         archiveFileName.set("DeepDarkBoss.jar")
     }
-    test {
-        useJUnitPlatform()
+
+    processResources{
+        from("$rootDir/LICENSE") {
+            into("META-INF") // 루트 경로에 포함
+        }
     }
 }
