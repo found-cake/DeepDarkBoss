@@ -1,5 +1,5 @@
 # 고대도시탐방(?)
-CSKUS 연합 CTF MISC 마인크래프트 문제 플러그인
+CSKWS 연합 CTF MISC 마인크래프트 문제 플러그인
 - [SuperLegendPunch](https://github.com/found-cake/SuperLegendPunch)
 - [DeepDarkBoss](https://github.com/found-cake/DeepDarkBoss)
 
